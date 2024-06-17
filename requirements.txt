@@ -1,0 +1,7 @@
+streamlit
+spleeter
+pydrive
+requests
+speechrecognition
+moviepy
+tenacity
