@@ -1,5 +1,4 @@
 streamlit
-speech_recognition
 spleeter
 pydrive
 requests
