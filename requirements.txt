@@ -5,7 +5,7 @@ requests==2.32.3
 moviepy==1.0.3
 tenacity==8.4.1
 numpy==1.26.4
-protobuf==5.27.1
+protobuf>=3.20,<5  # Adjusted to a compatible range with streamlit
 rich==13.7.1
 ffmpeg-python==0.2.0
 librosa==0.10.2.post1
@@ -23,11 +23,9 @@ gitpython!=3.1.19,<4,>=3.0.7
 pydeck<1,>=0.8.0b4
 tornado<7,>=6.0.3
 watchdog>=2.1.5
-httpx<0.17.0,>=0.16.1; extra == "http2"
 norbert==0.2.1
 importlib-metadata<8,>=1.4
 python-dateutil<3,>=2.7.3
 tzlocal<6,>=1.1
 validators<1,>=0.2
 pympler<2,>=0.9
-tzlocal<5,>=1.1
