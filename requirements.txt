@@ -1,5 +1,6 @@
 streamlit
 tensorflow
+dora
 torch
 torchaudio
 moviepy
