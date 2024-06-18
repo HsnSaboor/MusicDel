@@ -1,8 +1,8 @@
+requests
 streamlit
 tensorflow
-scikit-laern
-dora
-torch
-torchaudio
+tensorflow-gpu
 moviepy
-requests
+spleeter
+numpy
+pydub
