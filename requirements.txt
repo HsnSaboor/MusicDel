@@ -2,5 +2,5 @@ streamlit
 tensorflow
 torch
 torchaudio
-moviepy=
+moviepy
 requests
