@@ -5,6 +5,7 @@ import streamlit as st
 from spleeter.separator import Separator
 from moviepy.editor import VideoFileClip
 import tensorflow as tf
+import speech_recognition as sr
 
 # Initialize Spleeter separator
 separator = Separator('spleeter:2stems')
@@ -29,6 +30,24 @@ def remove_audio_from_video(video_path, output_format='webm'):
     output_path = os.path.splitext(video_path)[0] + f"_no_audio.{output_format}"
     video_no_audio.write_videofile(output_path, codec='libvpx' if output_format == 'webm' else 'libx264')
     return output_path
+
+def transcribe_audio(audio_path):
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(audio_path) as source:
+        audio = recognizer.record(source)
+        
+    try:
+        transcription = recognizer.recognize_google(audio)
+        return transcription
+    except sr.UnknownValueError:
+        return "Transcription failed: Audio not clear."
+    except sr.RequestError:
+        return "Transcription failed: Could not request results."
+
+def save_transcription(transcription, output_path):
+    with open(output_path, 'w') as f:
+        f.write(transcription)
+    print(f"Transcription saved to: {output_path}")
 
 def process_video(video_path, use_gpu=False):
     try:
@@ -55,6 +74,11 @@ def process_video(video_path, use_gpu=False):
             video_no_audio_output_path = os.path.join(output_path, os.path.basename(video_no_audio_path))
             os.rename(video_no_audio_path, video_no_audio_output_path)
 
+            # Transcribe audio
+            transcription = transcribe_audio(audio_path)
+            transcription_output_path = os.path.join(output_path, "transcription.txt")
+            save_transcription(transcription, transcription_output_path)
+
         st.success(f"{os.path.basename(video_path)} processing complete!")
         return True
 
@@ -63,7 +87,7 @@ def process_video(video_path, use_gpu=False):
         return False
 
 def main():
-    st.title("Video Processing App")
+    st.title("TranscriptGen - Video Processing and Transcription App")
 
     upload_option = st.sidebar.selectbox("Choose upload option", 
                                          ["Process single video", "Process multiple videos", 
