@@ -1,10 +1,11 @@
 import streamlit as st
 from pymongo import MongoClient
 from audio_separator.separator import Separator
-from moviepy.editor import VideoFileClip
+from moviepy.editor import VideoFileClip, AudioFileClip
 from io import BytesIO
 import zipfile
 import os
+import tempfile
 import time
 
 # MongoDB connection URI
@@ -25,26 +26,33 @@ def process_video(video_file):
     output_filename = f"{video_file.name.split('.')[0]}_vocals.mp4"
 
     # Save video file temporarily
-    video_path = os.path.join("./temp", video_file.name)
-    with open(video_path, "wb") as f:
-        f.write(video_file.getbuffer())
+    with tempfile.NamedTemporaryFile(delete=False) as temp_video:
+        temp_video.write(video_file.read())
 
     # Perform audio separation
-    clip = VideoFileClip(video_path)
+    clip = VideoFileClip(temp_video.name)
     audio = clip.audio
-    audio_path = os.path.join("./temp", "audio.wav")
+    audio_path = tempfile.mktemp(suffix=".wav")
     audio.write_audiofile(audio_path)
 
-    output_file_paths = separator.separate(audio_path)
+    try:
+        output_file_paths = separator.separate(audio_path)
 
-    # Combine vocals with original video
-    combined_clip = clip.set_audio(AudioFileClip(output_file_paths[0]))
-    combined_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac")
+        # Combine vocals with original video
+        combined_clip = clip.set_audio(AudioFileClip(output_file_paths[0]))
+        combined_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac")
 
-    # Delete temporary files
-    os.remove(video_path)
-    os.remove(audio_path)
-    os.remove(output_file_paths[0])
+        st.success(f"Processed video: {output_filename}")
+
+    except Exception as e:
+        st.error(f"Error processing video: {str(e)}")
+
+    finally:
+        # Delete temporary files
+        os.remove(temp_video.name)
+        os.remove(audio_path)
+        if len(output_file_paths) > 0:
+            os.remove(output_file_paths[0])
 
     return output_filename
 
