@@ -2,6 +2,7 @@ requests
 streamlit
 onnxruntime
 onnx
+ffmpeg-python
 librosa  
 six
 tqdm
