@@ -2,8 +2,6 @@ requests
 streamlit
 pymongo
 audio-separator
-tensorflow
-tensorflow-gpu
 moviepy
 numpy
 pydub
