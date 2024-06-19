@@ -1,7 +1,6 @@
 requests
 streamlit
 onnxruntime
-orch
 onnx
 librosa  
 six
