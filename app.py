@@ -6,10 +6,11 @@ from io import BytesIO
 import zipfile
 import os
 import tempfile
+import subprocess
 import time
 
 # MongoDB connection URI
-mongo_uri = "mongodb+srv://businesssaboorhassan:<password>@nusicdel.e8riwde.mongodb.net/?retryWrites=true&w=majority&appName=nusicdel"
+mongo_uri = "mongodb+srv://businesssaboorhassan:<password>@nusicdel.e8riwde.mongodb.net/<dbname>?retryWrites=true&w=majority"
 
 # Initialize MongoDB client
 client = MongoClient(mongo_uri)
@@ -18,6 +19,15 @@ collection = db["video_audio_files"]
 
 # Initialize audio separator
 separator = Separator()
+
+def get_ffmpeg_path():
+    # Attempt to find ffmpeg executable path
+    try:
+        ffmpeg_path = subprocess.check_output(["which", "ffmpeg"]).strip().decode()
+        return ffmpeg_path
+    except subprocess.CalledProcessError:
+        st.error("FFmpeg not found. Please install FFmpeg and ensure it's in your PATH.")
+        st.stop()
 
 def process_video(video_file):
     st.write("Processing video...")
@@ -36,6 +46,10 @@ def process_video(video_file):
     audio.write_audiofile(audio_path)
 
     try:
+        # Check if ffmpeg is available
+        ffmpeg_path = get_ffmpeg_path()
+        st.write(f"Using FFmpeg at: {ffmpeg_path}")
+
         output_file_paths = separator.separate(audio_path)
 
         # Combine vocals with original video
@@ -43,6 +57,15 @@ def process_video(video_file):
         combined_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac")
 
         st.success(f"Processed video: {output_filename}")
+
+        # Save to MongoDB
+        file_data = {
+            "filename": output_filename,
+            "filepath": os.path.abspath(output_filename),
+            "uploaded_at": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        collection.insert_one(file_data)
+        st.write("Saved to MongoDB.")
 
     except Exception as e:
         st.error(f"Error processing video: {str(e)}")
