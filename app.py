@@ -1,5 +1,4 @@
 import streamlit as st
-from pymongo import MongoClient
 from audio_separator.separator import Separator
 from moviepy.editor import VideoFileClip, AudioFileClip
 from io import BytesIO
@@ -8,23 +7,25 @@ import os
 import tempfile
 import subprocess
 import time
-
-# Set ffmpeg path explicitly
-import os
-os.environ["FFMPEG_BINARY"] = "/usr/bin/ffmpeg"  # Replace with your actual ffmpeg path
-
-# MongoDB connection URI
-mongo_uri = "mongodb+srv://businesssaboorhassan:<musicdel>@nusicdel.e8riwde.mongodb.net/<dbname>?retryWrites=true&w=majority"
-
-# Initialize MongoDB client
-client = MongoClient(mongo_uri)
-db = client["audio_video"]
-collection = db["video_audio_files"]
+import shutil
 
 # Initialize audio separator
 separator = Separator()
 
-def process_video(video_file):
+def get_ffmpeg_path():
+    # Try to get the ffmpeg path using shutil.which
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path is None:
+        # If shutil.which returns None, try to find it in the PATH environment variable
+        try:
+            result = subprocess.run(['which', 'ffmpeg'], capture_output=True, text=True)
+            ffmpeg_path = result.stdout.strip()
+        except subprocess.CalledProcessError:
+            ffmpeg_path = None
+
+    return ffmpeg_path
+
+def process_video(video_file, ffmpeg_path):
     st.write("Processing video...")
 
     # Generate output filename
@@ -41,8 +42,9 @@ def process_video(video_file):
     audio.write_audiofile(audio_path)
 
     try:
-        # Check if ffmpeg is available
-        ffmpeg_path = subprocess.check_output(["which", "ffmpeg"]).strip().decode()
+        if ffmpeg_path is None:
+            raise FileNotFoundError("FFmpeg not found. Please make sure it is installed and in the system PATH.")
+
         st.write(f"Using FFmpeg at: {ffmpeg_path}")
 
         output_file_paths = separator.separate(audio_path)
@@ -53,14 +55,15 @@ def process_video(video_file):
 
         st.success(f"Processed video: {output_filename}")
 
-        # Save to MongoDB
-        file_data = {
-            "filename": output_filename,
-            "filepath": os.path.abspath(output_filename),
-            "uploaded_at": time.strftime("%Y-%m-%d %H:%M:%S")
-        }
-        collection.insert_one(file_data)
-        st.write("Saved to MongoDB.")
+        # Optionally save processed files to a specific folder
+        processed_folder = "processed_videos"
+        if not os.path.exists(processed_folder):
+            os.makedirs(processed_folder)
+
+        processed_filepath = os.path.join(processed_folder, output_filename)
+        combined_clip.write_videofile(processed_filepath, codec="libx264", audio_codec="aac")
+
+        st.markdown(f"Download processed video: [Processed Video]({processed_filepath})")
 
     except Exception as e:
         st.error(f"Error processing video: {str(e)}")
@@ -75,11 +78,12 @@ def process_video(video_file):
     return output_filename
 
 def upload_and_process_files(file):
+    ffmpeg_path = get_ffmpeg_path()
     if isinstance(file, list):
         for f in file:
-            process_video(f)
+            process_video(f, ffmpeg_path)
     else:
-        return process_video(file)
+        return process_video(file, ffmpeg_path)
 
 def main():
     st.title("Video Audio Separation App")
@@ -101,29 +105,20 @@ def main():
             for f in uploaded_files:
                 upload_and_process_files(f)
 
-            # Create a zip file with processed videos
-            zip_filename = f"processed_videos_{int(time.time())}.zip"
-            with zipfile.ZipFile(zip_filename, "w") as zip_file:
-                for f in uploaded_files:
-                    processed_filename = f"{os.path.splitext(os.path.basename(f))[0]}_vocals.mp4"
-                    zip_file.write(processed_filename)
-
-            st.markdown(f"Download processed videos: [Processed Videos]({zip_filename})")
-            
-            # Clean up processed files after 1 hour
-            time.sleep(3600)
+            # Clean up temporary files after processing
             for f in uploaded_files:
-                os.remove(f)
+                if isinstance(f, str) and os.path.exists(f):
+                    os.remove(f)
 
         else:
             # Single video file upload
             uploaded_file = file
-            output_filename = upload_and_process_files(uploaded_file)
-            st.markdown(f"Download processed video: [Processed Video]({output_filename})")
+            ffmpeg_path = get_ffmpeg_path()
+            output_filename = upload_and_process_files(uploaded_file, ffmpeg_path)
 
-            # Clean up processed file after 1 hour
-            time.sleep(3600)
-            os.remove(output_filename)
+            # Clean up processed file after displaying link
+            if os.path.exists(output_filename):
+                os.remove(output_filename)
 
 if __name__ == "__main__":
     main()
