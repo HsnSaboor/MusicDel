@@ -9,6 +9,10 @@ import tempfile
 import subprocess
 import time
 
+# Set ffmpeg path explicitly
+import os
+os.environ["FFMPEG_BINARY"] = "/usr/bin/ffmpeg"  # Replace with your actual ffmpeg path
+
 # MongoDB connection URI
 mongo_uri = "mongodb+srv://businesssaboorhassan:<musicdel>@nusicdel.e8riwde.mongodb.net/<dbname>?retryWrites=true&w=majority"
 
@@ -19,15 +23,6 @@ collection = db["video_audio_files"]
 
 # Initialize audio separator
 separator = Separator()
-
-def get_ffmpeg_path():
-    # Attempt to find ffmpeg executable path
-    try:
-        ffmpeg_path = subprocess.check_output(["which", "ffmpeg"]).strip().decode()
-        return ffmpeg_path
-    except subprocess.CalledProcessError:
-        st.error("FFmpeg not found. Please install FFmpeg and ensure it's in your PATH.")
-        st.stop()
 
 def process_video(video_file):
     st.write("Processing video...")
@@ -47,7 +42,7 @@ def process_video(video_file):
 
     try:
         # Check if ffmpeg is available
-        ffmpeg_path = get_ffmpeg_path()
+        ffmpeg_path = subprocess.check_output(["which", "ffmpeg"]).strip().decode()
         st.write(f"Using FFmpeg at: {ffmpeg_path}")
 
         output_file_paths = separator.separate(audio_path)
