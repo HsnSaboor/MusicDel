@@ -6,7 +6,6 @@ import zipfile
 import os
 import tempfile
 import subprocess
-import time
 import shutil
 
 # Initialize audio separator
@@ -22,6 +21,10 @@ def get_ffmpeg_path():
             ffmpeg_path = result.stdout.strip()
         except subprocess.CalledProcessError:
             ffmpeg_path = None
+
+    # Add more specific paths as needed for your deployment environment
+    if ffmpeg_path is None:
+        ffmpeg_path = "/usr/local/bin/ffmpeg"  # Example path, adjust as per your setup
 
     return ffmpeg_path
 
