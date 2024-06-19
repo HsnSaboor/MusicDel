@@ -1,5 +1,11 @@
 requests
 streamlit
+onnxruntime
+orch
+onnx
+librosa  
+six
+tqdm
 pymongo
 audio-separator
 moviepy
