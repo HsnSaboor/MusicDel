@@ -10,7 +10,7 @@ import subprocess
 import time
 
 # MongoDB connection URI
-mongo_uri = "mongodb+srv://businesssaboorhassan:<password>@nusicdel.e8riwde.mongodb.net/<dbname>?retryWrites=true&w=majority"
+mongo_uri = "mongodb+srv://businesssaboorhassan:<musicdel>@nusicdel.e8riwde.mongodb.net/<dbname>?retryWrites=true&w=majority"
 
 # Initialize MongoDB client
 client = MongoClient(mongo_uri)
