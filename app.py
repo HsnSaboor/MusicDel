@@ -77,13 +77,12 @@ def process_video(video_file, ffmpeg_path):
 
     return output_filename
 
-def upload_and_process_files(file):
-    ffmpeg_path = get_ffmpeg_path()
-    if isinstance(file, list):
-        for f in file:
-            process_video(f, ffmpeg_path)
+def upload_and_process_files(files, ffmpeg_path):
+    if isinstance(files, list):
+        for file in files:
+            process_video(file, ffmpeg_path)
     else:
-        return process_video(file, ffmpeg_path)
+        return process_video(files, ffmpeg_path)
 
 def main():
     st.title("Video Audio Separation App")
@@ -101,9 +100,11 @@ def main():
 
             st.write("Processing multiple videos...")
 
+            ffmpeg_path = get_ffmpeg_path()
+
             # Process each uploaded file
-            for f in uploaded_files:
-                upload_and_process_files(f)
+            for uploaded_file in uploaded_files:
+                upload_and_process_files(uploaded_file, ffmpeg_path)
 
             # Clean up temporary files after processing
             for f in uploaded_files:
