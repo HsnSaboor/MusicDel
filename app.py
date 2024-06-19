@@ -1,145 +1,103 @@
-import os
-import zipfile
-import requests
 import streamlit as st
-from spleeter.separator import Separator
+from pymongo import MongoClient
+from audio_separator import Separator
 from moviepy.editor import VideoFileClip
-import tensorflow as tf
+from io import BytesIO
+import zipfile
+import os
+import time
 
-# Initialize Spleeter separator
-separator = Separator('spleeter:2stems')
+# MongoDB connection URI
+mongo_uri = "mongodb+srv://businesssaboorhassan:<password>@nusicdel.e8riwde.mongodb.net/?retryWrites=true&w=majority&appName=nusicdel"
 
-# TensorFlow session configuration
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth = True
-session = tf.compat.v1.Session(config=config)
-tf.compat.v1.keras.backend.set_session(session)
+# Initialize MongoDB client
+client = MongoClient(mongo_uri)
+db = client["audio_video"]
+collection = db["video_audio_files"]
 
-# Helper functions for file operations
+# Initialize audio separator
+separator = Separator()
 
-def download_file(url, dest_path):
-    response = requests.get(url, stream=True)
-    with open(dest_path, 'wb') as file:
-        for chunk in response.iter_content(chunk_size=8192):
-            file.write(chunk)
+def process_video(video_file):
+    st.write("Processing video...")
 
-def remove_audio_from_video(video_path, output_format='webm'):
-    video = VideoFileClip(video_path)
-    video_no_audio = video.without_audio()
-    output_path = os.path.splitext(video_path)[0] + f"_no_audio.{output_format}"
-    video_no_audio.write_videofile(output_path, codec='libvpx' if output_format == 'webm' else 'libx264')
-    return output_path
+    # Generate output filename
+    output_filename = f"{video_file.name.split('.')[0]}_vocals.mp4"
 
-def process_video(video_path, use_gpu=False):
-    try:
-        with st.spinner(f"Processing {os.path.basename(video_path)}..."):
-            # Extract audio
-            video = VideoFileClip(video_path)
-            audio_path = os.path.splitext(video_path)[0] + '.wav'
-            video.audio.write_audiofile(audio_path, codec='pcm_s16le', fps=16000)
+    # Save video file temporarily
+    video_path = os.path.join("./temp", video_file.name)
+    with open(video_path, "wb") as f:
+        f.write(video_file.getbuffer())
 
-            # Separate music from audio
-            output_path = os.path.join("output", os.path.splitext(os.path.basename(video_path))[0])
-            os.makedirs(output_path, exist_ok=True)
+    # Perform audio separation
+    clip = VideoFileClip(video_path)
+    audio = clip.audio
+    audio_path = os.path.join("./temp", "audio.wav")
+    audio.write_audiofile(audio_path)
 
-            if use_gpu:
-                separator.set_gpu_memory_limit(8)  # Adjust based on your GPU memory
-                separator.set_forward_device("gpu")
-            else:
-                separator.set_forward_device("cpu")
+    output_file_paths = separator.separate(audio_path)
 
-            separator.separate_to_file(audio_path, output_path)
+    # Combine vocals with original video
+    combined_clip = clip.set_audio(AudioFileClip(output_file_paths[0]))
+    combined_clip.write_videofile(output_filename, codec="libx264", audio_codec="aac")
 
-            # Remove audio from video
-            video_no_audio_path = remove_audio_from_video(video_path)
-            video_no_audio_output_path = os.path.join(output_path, os.path.basename(video_no_audio_path))
-            os.rename(video_no_audio_path, video_no_audio_output_path)
+    # Delete temporary files
+    os.remove(video_path)
+    os.remove(audio_path)
+    os.remove(output_file_paths[0])
 
-        st.success(f"{os.path.basename(video_path)} processing complete!")
-        return True
+    return output_filename
 
-    except Exception as e:
-        st.error(f"Error processing {os.path.basename(video_path)}: {str(e)}")
-        return False
+def upload_and_process_files(file):
+    if isinstance(file, list):
+        for f in file:
+            process_video(f)
+    else:
+        return process_video(file)
 
 def main():
-    st.title("Video Processing App")
+    st.title("Video Audio Separation App")
 
-    upload_option = st.sidebar.selectbox("Choose upload option", 
-                                         ["Process single video", "Process multiple videos", 
-                                          "Extract videos from zip file", "Download videos from URL"])
+    file = st.file_uploader("Upload a video file or a zip file containing videos", type=["mp4", "zip"])
 
-    if upload_option == "Process single video":
-        video_file = st.file_uploader("Upload a single video file", type=["mp4", "mkv"])
-        if video_file:
-            video_path = os.path.join("./uploaded_videos", video_file.name)
-            with open(video_path, "wb") as f:
-                f.write(video_file.read())
-            use_gpu = st.sidebar.checkbox("Use GPU (if available)")
-            success = process_video(video_path, use_gpu)
-            if success:
-                st.write("Processing successful!")
+    if file is not None:
+        if isinstance(file, list) or zipfile.is_zipfile(file):
+            if isinstance(file, list):
+                uploaded_files = file
             else:
-                st.error("Processing failed.")
+                with zipfile.ZipFile(file) as zip_ref:
+                    zip_ref.extractall("./temp")
+                    uploaded_files = [os.path.join("./temp", name) for name in zip_ref.namelist()]
 
-    elif upload_option == "Process multiple videos":
-        st.write("Upload multiple video files")
-        uploaded_files = st.file_uploader("Choose multiple video files", type=["mp4", "mkv"], 
-                                          accept_multiple_files=True)
-        if uploaded_files:
-            use_gpu = st.sidebar.checkbox("Use GPU (if available)")
-            for video_file in uploaded_files:
-                video_path = os.path.join("./uploaded_videos", video_file.name)
-                with open(video_path, "wb") as f:
-                    f.write(video_file.read())
-                success = process_video(video_path, use_gpu)
-                if success:
-                    st.write(f"Processing {video_file.name} successful!")
-                else:
-                    st.error(f"Processing {video_file.name} failed.")
+            st.write("Processing multiple videos...")
 
-    elif upload_option == "Extract videos from zip file":
-        st.write("Upload a zip file containing videos")
-        zip_file = st.file_uploader("Choose a zip file", type="zip")
-        if zip_file:
-            zip_path = os.path.join("./uploaded_zips", zip_file.name)
-            with open(zip_path, "wb") as f:
-                f.write(zip_file.read())
+            # Process each uploaded file
+            for f in uploaded_files:
+                upload_and_process_files(f)
+
+            # Create a zip file with processed videos
+            zip_filename = f"processed_videos_{int(time.time())}.zip"
+            with zipfile.ZipFile(zip_filename, "w") as zip_file:
+                for f in uploaded_files:
+                    processed_filename = f"{os.path.splitext(os.path.basename(f))[0]}_vocals.mp4"
+                    zip_file.write(processed_filename)
+
+            st.markdown(f"Download processed videos: [Processed Videos]({zip_filename})")
             
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall("./input_videos")
+            # Clean up processed files after 1 hour
+            time.sleep(3600)
+            for f in uploaded_files:
+                os.remove(f)
 
-            use_gpu = st.sidebar.checkbox("Use GPU (if available)")
-            for root, dirs, files in os.walk("./input_videos"):
-                for file in files:
-                    if file.endswith('.mp4') or file.endswith('.mkv'):
-                        video_path = os.path.join(root, file)
-                        success = process_video(video_path, use_gpu)
-                        if success:
-                            st.write(f"Processing {file} successful!")
-                        else:
-                            st.error(f"Processing {file} failed.")
+        else:
+            # Single video file upload
+            uploaded_file = file
+            output_filename = upload_and_process_files(uploaded_file)
+            st.markdown(f"Download processed video: [Processed Video]({output_filename})")
 
-    elif upload_option == "Download videos from URL":
-        st.write("Provide URL of the zip file containing videos")
-        zip_url = st.text_input("Enter URL")
-        if st.button("Download"):
-            zip_path = "./downloaded_videos.zip"
-            download_file(zip_url, zip_path)
-
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall("./input_videos")
-
-            use_gpu = st.sidebar.checkbox("Use GPU (if available)")
-            for root, dirs, files in os.walk("./input_videos"):
-                for file in files:
-                    if file.endswith('.mp4') or file.endswith('.mkv'):
-                        video_path = os.path.join(root, file)
-                        success = process_video(video_path, use_gpu)
-                        if success:
-                            st.write(f"Processing {file} successful!")
-                        else:
-                            st.error(f"Processing {file} failed.")
+            # Clean up processed file after 1 hour
+            time.sleep(3600)
+            os.remove(output_filename)
 
 if __name__ == "__main__":
     main()
