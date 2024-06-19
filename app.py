@@ -1,6 +1,6 @@
 import streamlit as st
 from pymongo import MongoClient
-from audio_separator import Separator
+from audio_separator.separator import Separator
 from moviepy.editor import VideoFileClip
 from io import BytesIO
 import zipfile
